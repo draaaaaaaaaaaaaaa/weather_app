@@ -1,31 +1,32 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:ui';
 
-import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 
-void main(List<String> args) {
-  runApp(WeatherApp());
-}
+void main(List<String> args) => runApp(WeatherApp());
 
 class WeatherApp extends StatefulWidget {
   const WeatherApp({Key? key}) : super(key: key);
 
   @override
-  _WeatherAppState createState() => _WeatherAppState();
+  State<WeatherApp> createState() => _WeatherAppState();
 }
 
 class _WeatherAppState extends State<WeatherApp> {
   int? temprature;
-
   String location = 'Jakarta';
   String weather = 'clear';
   int woeid = 1047378;
   String abbreviation = 'c';
 
-  String errormassage = "";
+  String errormessage = '';
+
+  //buat var untuk list tempratute nya
+  var minTempratureForecast = List.filled(7, 0);
+  var maxTempratureForecast = List.filled(7, 0);
+  var abbrevationForecast = List.filled(7, '');
 
   String searchApiUrl =
       'https://www.metaweather.com/api/location/search/?query=';
@@ -33,9 +34,10 @@ class _WeatherAppState extends State<WeatherApp> {
   String locationApiUrl = 'https://www.metaweather.com/api/location/';
 
   @override
-  void iniState() {
+  void initState() {
     super.initState();
     fetchLocation();
+    fetchLocationDay();
   }
 
   Future<void> fetchSearch(String input) async {
@@ -46,24 +48,20 @@ class _WeatherAppState extends State<WeatherApp> {
       setState(() {
         location = result['title'];
         woeid = result['woeid'];
-        errormassage = '';
+        errormessage = '';
       });
     } catch (error) {
-      errormassage =
-      "maaf kita tidak ada data untuk kota tersebut, silahkan untuk mencoba kota yang lain";
+      errormessage =
+          "maaf kita tidak ada data untuk kota itu, coba kota yang lain";
     }
   }
 
   Future<void> fetchLocation() async {
     var locationResult =
-    await http.get(Uri.parse(locationApiUrl + woeid.toString()));
+        await http.get(Uri.parse(locationApiUrl + woeid.toString()));
     var result = json.decode((locationResult.body));
     var consolidated_weather = result['consolidated_weather'];
     var data = consolidated_weather[0];
-
-    var minTemperature = List.filled(7, 0);
-    var maxTemperature = List.filled(7, 0);
-    var abbreviationForecast = List.filled(7, ' ');
 
     setState(() {
       temprature = data['the_temp'].round();
@@ -72,25 +70,33 @@ class _WeatherAppState extends State<WeatherApp> {
     });
   }
 
-  void fetchLocationDay() async {
+  Future<void> fetchLocationDay() async {
     var today = DateTime.now();
     for (var i = 0; i < 7; i++) {
       var locationDayResult = await http.get(Uri.parse(locationApiUrl +
-          woeid.toString() +'/' +DateFormat('y/M/d').format(today.add(Duration(days: i + 1))).toString()));
-      var resault = jsonDecode(locationDayResult.body);
-      var data = resault[0];
+          woeid.toString() +
+          '/' +
+          DateFormat('y/M/d')
+              .format(today.add(Duration(days: i + 1)))
+              .toString()));
+      var result = jsonDecode(locationDayResult.body);
+      var data = result[0];
 
       setState(() {
-        temprature = data['the t']
+        minTempratureForecast[i] = data['min_temp'].round();
+        maxTempratureForecast[i] = data['max_temp'].round();
+        abbrevationForecast[i] = data['weather_state_abbr'];
       });
     }
   }
 
-  void onTxtFieldSubmitted(String input) {
-    fetchSearch(input);
-    fetchLocation();
+  void onTextFieldSubmitted(String input) async  {
+    await fetchLocation();
+    await fetchSearch(input);
+    await fetchLocationDay();
   }
-@override
+
+  @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
@@ -98,113 +104,118 @@ class _WeatherAppState extends State<WeatherApp> {
         decoration: BoxDecoration(
             image: DecorationImage(
                 image: AssetImage('images/$weather.png'), fit: BoxFit.cover)),
-        child: temprature == null ? const Center(
-          child: CircularProgressIndicator(),) :
-        Scaffold(
-          backgroundColor: Colors.transparent,
-          body: Column(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Column(
-                children: [
-                  Center(
-                    child: Image.network(
-                      'https://www.metaweather.com/static/img/weather/png/' +
-                          abbreviation +
-                          '.png',
-                      width: 100,
+        child: temprature == null
+            ? const Center(child: CircularProgressIndicator())
+            : Scaffold(
+                backgroundColor: Colors.transparent,
+                body: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Column(
+                      children: [
+                        Center(
+                          child: Image.network(
+                            'https://www.metaweather.com/static/img/weather/png/' +
+                                abbreviation +
+                                '.png',
+                            width: 100,
+                          ),
+                        ),
+                        Center(
+                          child: Text(
+                            temprature.toString() + '°C',
+                            style: TextStyle(color: Colors.white, fontSize: 60),
+                          ),
+                        ),
+                        Center(
+                          child: Text(
+                            location,
+                            style: TextStyle(color: Colors.white, fontSize: 40),
+                          ),
+                        )
+                      ],
                     ),
-                  ),
-                  Center(
-                    child: Text(
-                      temprature.toString() + '°C',
-                      style: TextStyle(color: Colors.white, fontSize: 60),
-                    ),
-                  ),
-                  Center(
-                    child: Text(
-                      location,
-                      style: TextStyle(color: Colors.white, fontSize: 40),
-                    ),
-                  ),
-                ],
-              ),
-              Padding(
-                padding: EdgeInsets.only(top: 50),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      for(var i=0;i<7; i++)
-                      forecastElement(i+i,
-                       abbreviation, minTemperature, maxTemperature)
-                    ],
-                  ),
-                ),
-                ),
-              Column(
-                children: [
-                  Container(
-                    width: 300,
-                    child: TextField(
-                      onSubmitted: (String input) {
-                        onTxtFieldSubmitted(input);
-                      },
-                      style: TextStyle(color: Colors.white, fontSize: 25),
-                      decoration: InputDecoration(
-                          hintStyle:
-                          TextStyle(color: Colors.white, fontSize: 18),
-                          hintText: 'Search another locatio...',
-                          prefixIcon: Icon(Icons.search)),
-                    ),
-                  ),
-                  Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 32),
-                    child: Text(
-                      errormassage,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                          color: Colors.red,
-                          fontSize: Platform.isAndroid ? 15 : 20
+                    Padding(
+                      padding: EdgeInsets.only(top: 50),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            for(var i = 0; i<7; i++)
+                            forecastElement(
+                              i+1,
+                              abbrevationForecast[i],
+                              maxTempratureForecast[i],
+                              minTempratureForecast[i]
+                            )
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              )
-            ],
-          ),
-        ),
+                    Column(
+                      children: [
+                        Container(
+                          width: 300,
+                          child: TextField(
+                            onSubmitted: (String input) {
+                              onTextFieldSubmitted(input);
+                            },
+                            style: TextStyle(color: Colors.white, fontSize: 25),
+                            decoration: InputDecoration(
+                                hintText: 'Search another locatio...',
+                                hintStyle: TextStyle(
+                                    color: Colors.white, fontSize: 18),
+                                prefixIcon: Icon(Icons.search)),
+                          ),
+                        ),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 32),
+                          child: Text(
+                            errormessage,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                                color: Colors.red,
+                                fontSize: Platform.isAndroid ? 15 : 20),
+                          ),
+                        ),
+                      ],
+                    )
+                  ],
+                ),
+              ),
       ),
     );
   }
 }
 
 Widget forecastElement(
-    daysFromNow, abbreviation, minTemperature, maxTemperature) {
+    daysFromNow, abbreviation, maxTemprature, minTempreture) {
   var now = DateTime.now();
   var oneDayFromNow = now.add(Duration(days: daysFromNow));
   return Padding(
-    padding:  EdgeInsets.only(left: 16),
+    padding: EdgeInsets.only(
+      left: 16,
+    ),
     child: Container(
       decoration: BoxDecoration(
-          color:  Color.fromRGBO(205, 212, 228, 0.2),
+          color: Color.fromRGBO(205, 212, 228, 0.2),
           borderRadius: BorderRadius.circular(10)),
       child: Padding(
-        padding:  EdgeInsets.all(16),
+        padding: EdgeInsets.all(16),
         child: Column(
           children: [
             Text(
               DateFormat.E().format(oneDayFromNow),
-              style:  TextStyle(color: Colors.white, fontSize: 25),
+              style: TextStyle(color: Colors.white, fontSize: 25),
             ),
             Text(
               DateFormat.MMMd().format(oneDayFromNow),
-              style:  TextStyle(color: Colors.white, fontSize: 20),
+              style: TextStyle(color: Colors.white, fontSize: 20),
             ),
             Padding(
               padding: EdgeInsets.symmetric(
-              vertical: 16,
+                vertical: 16,
               ),
               child: Image.network(
                 'https://www.metaweather.com/static/img/weather/png/' +
@@ -214,19 +225,13 @@ Widget forecastElement(
               ),
             ),
             Text(
-              'High: ' + maxTemperature.toString() + ' °C',
-              style:  TextStyle(
-                fontSize: 20,
-                color: Colors.white,
-              ),
+              'High ' + maxTemprature.toString() + '℃',
+              style: TextStyle(color: Colors.white, fontSize: 20),
             ),
             Text(
-              'Low: ' + minTemperature.toString() + ' °C',
-              style:  TextStyle(
-                fontSize: 20,
-                color: Colors.white,
-              ),
-            ),
+              'Low ' + minTempreture.toString() + '℃',
+              style: TextStyle(color: Colors.white, fontSize: 20),
+            )
           ],
         ),
       ),

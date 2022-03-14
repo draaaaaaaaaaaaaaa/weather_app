@@ -1,69 +1,106 @@
 import 'dart:convert';
+import 'dart:io';
+import 'dart:ui';
+
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 void main(List<String> args) {
-  runApp(const WeatherApp());
+  runApp(WeatherApp());
 }
 
 class WeatherApp extends StatefulWidget {
   const WeatherApp({Key? key}) : super(key: key);
 
   @override
-  State<WeatherApp> createState() => _WeatherAppState();
+  _WeatherAppState createState() => _WeatherAppState();
 }
+
 class _WeatherAppState extends State<WeatherApp> {
-  int temperatured = 0;
+  int? temprature;
+
   String location = 'Jakarta';
   String weather = 'clear';
   int woeid = 1047378;
-  String abbviation = 'c';
+  String abbreviation = 'c';
 
-  String searchApiUrl = 'https://www.metaweather.com/api/location/search/?query';
+  String errormassage = "";
+
+  String searchApiUrl =
+      'https://www.metaweather.com/api/location/search/?query=';
 
   String locationApiUrl = 'https://www.metaweather.com/api/location/';
 
-  Future<void> fetchSearch(String input) async {
-    var searchResult = await http.get(Uri.parse(searchApiUrl+input));
-    var result = json.decode(searchResult.body)[0];
-
-    setState(() {
-      location = result['title'];
-      woeid = result['woeid'];
-    });
+  @override
+  void iniState() {
+    super.initState();
+    fetchLocation();
   }
+
+  Future<void> fetchSearch(String input) async {
+    try {
+      var searchResult = await http.get(Uri.parse(searchApiUrl + input));
+      var result = json.decode(searchResult.body)[0];
+
+      setState(() {
+        location = result['title'];
+        woeid = result['woeid'];
+        errormassage = '';
+      });
+    } catch (error) {
+      errormassage =
+      "maaf kita tidak ada data untuk kota tersebut, silahkan untuk mencoba kota yang lain";
+    }
+  }
+
   Future<void> fetchLocation() async {
-    var locationResult = await http.get(Uri.parse(locationApiUrl+woeid.toString()));
+    var locationResult =
+    await http.get(Uri.parse(locationApiUrl + woeid.toString()));
     var result = json.decode((locationResult.body));
     var consolidated_weather = result['consolidated_weather'];
     var data = consolidated_weather[0];
-    
+
+    var minTemperature = List.filled(7, 0);
+    var maxTemperature = List.filled(7, 0);
+    var abbreviationForecast = List.filled(7, ' ');
 
     setState(() {
-      temperatured = data['the_temp'].round();
-      weather = data['weather_state_name'].replaceAll(' ','').toLowerCase();
-      abbviation = 
+      temprature = data['the_temp'].round();
+      weather = data['weather_state_name'].replaceAll(' ', '').toLowerCase();
+      abbreviation = data['weather_state_abbr'];
     });
   }
 
-  void onTextFieldSubmitted(String input) async{
-     fetchLocation();
-     fetchSearch(input);
+  void fetchLocationDay() async {
+    var today = DateTime.now();
+    for (var i = 0; i < 7; i++) {
+      var locationDayResult = await http.get(Uri.parse(locationApiUrl +
+          woeid.toString() +'/' +DateFormat('y/M/d').format(today.add(Duration(days: i + 1))).toString()));
+      var resault = jsonDecode(locationDayResult.body);
+      var data = resault[0];
+
+      setState(() {
+        temprature = data['the t']
+      });
+    }
   }
 
-
-  @override
+  void onTxtFieldSubmitted(String input) {
+    fetchSearch(input);
+    fetchLocation();
+  }
+@override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       home: Container(
         decoration: BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage('images/$weather.png'),
-            fit: BoxFit.cover
-          ),
-        ),
-        child: Scaffold(
+            image: DecorationImage(
+                image: AssetImage('images/$weather.png'), fit: BoxFit.cover)),
+        child: temprature == null ? const Center(
+          child: CircularProgressIndicator(),) :
+        Scaffold(
           backgroundColor: Colors.transparent,
           body: Column(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -72,48 +109,69 @@ class _WeatherAppState extends State<WeatherApp> {
               Column(
                 children: [
                   Center(
-                    child:  Image.network(''),
+                    child: Image.network(
+                      'https://www.metaweather.com/static/img/weather/png/' +
+                          abbreviation +
+                          '.png',
+                      width: 100,
+                    ),
                   ),
                   Center(
                     child: Text(
-                      temperatured.toString() + '°C',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 60,
-                      ),
+                      temprature.toString() + '°C',
+                      style: TextStyle(color: Colors.white, fontSize: 60),
                     ),
                   ),
                   Center(
                     child: Text(
                       location,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 40,
-                      ),
+                      style: TextStyle(color: Colors.white, fontSize: 40),
                     ),
-                  )
+                  ),
                 ],
               ),
-              Container(
-                width: 300,
-                child: TextField(
-                  onSubmitted: (String input){
-                    onTextFieldSubmitted(input);
-                  },
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 25,
-                  ),
-                  decoration: const InputDecoration(
-                    hintText: 'Search another location...',
-                    hintStyle: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                    ),
-                    prefixIcon: Icon(Icons.search),
+              Padding(
+                padding: EdgeInsets.only(top: 50),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      for(var i=0;i<7; i++)
+                      forecastElement(i+i,
+                       abbreviation, minTemperature, maxTemperature)
+                    ],
                   ),
                 ),
-              ),
+                ),
+              Column(
+                children: [
+                  Container(
+                    width: 300,
+                    child: TextField(
+                      onSubmitted: (String input) {
+                        onTxtFieldSubmitted(input);
+                      },
+                      style: TextStyle(color: Colors.white, fontSize: 25),
+                      decoration: InputDecoration(
+                          hintStyle:
+                          TextStyle(color: Colors.white, fontSize: 18),
+                          hintText: 'Search another locatio...',
+                          prefixIcon: Icon(Icons.search)),
+                    ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 32),
+                    child: Text(
+                      errormassage,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          color: Colors.red,
+                          fontSize: Platform.isAndroid ? 15 : 20
+                      ),
+                    ),
+                  ),
+                ],
+              )
             ],
           ),
         ),
@@ -122,3 +180,56 @@ class _WeatherAppState extends State<WeatherApp> {
   }
 }
 
+Widget forecastElement(
+    daysFromNow, abbreviation, minTemperature, maxTemperature) {
+  var now = DateTime.now();
+  var oneDayFromNow = now.add(Duration(days: daysFromNow));
+  return Padding(
+    padding:  EdgeInsets.only(left: 16),
+    child: Container(
+      decoration: BoxDecoration(
+          color:  Color.fromRGBO(205, 212, 228, 0.2),
+          borderRadius: BorderRadius.circular(10)),
+      child: Padding(
+        padding:  EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Text(
+              DateFormat.E().format(oneDayFromNow),
+              style:  TextStyle(color: Colors.white, fontSize: 25),
+            ),
+            Text(
+              DateFormat.MMMd().format(oneDayFromNow),
+              style:  TextStyle(color: Colors.white, fontSize: 20),
+            ),
+            Padding(
+              padding: EdgeInsets.symmetric(
+              vertical: 16,
+              ),
+              child: Image.network(
+                'https://www.metaweather.com/static/img/weather/png/' +
+                    abbreviation +
+                    '.png',
+                width: 50,
+              ),
+            ),
+            Text(
+              'High: ' + maxTemperature.toString() + ' °C',
+              style:  TextStyle(
+                fontSize: 20,
+                color: Colors.white,
+              ),
+            ),
+            Text(
+              'Low: ' + minTemperature.toString() + ' °C',
+              style:  TextStyle(
+                fontSize: 20,
+                color: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
